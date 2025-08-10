@@ -1,9 +1,8 @@
 """Module that implements Byte Pair Encoding/Decoding"""
 import os
-import pickle
 from collections import defaultdict
 from multiprocessing import Pool, cpu_count
-from typing import Iterable, Iterator
+from collections.abc import Iterable, Iterator
 
 import regex as re
 
@@ -242,6 +241,7 @@ if __name__ == "__main__":
     # print(f"Longest word in vocabulary: {max(vocab.values(), key=lambda x: len(x))}")
     # print(f"Top 3 merges: {merges[:3]}")
 
+    # import pickle
     # with open('trained_vocab.pkl', 'wb') as file:
     #     pickle.dump(vocab, file)
     # with open('trained_merges.pkl', 'wb') as file:
