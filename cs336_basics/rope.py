@@ -37,12 +37,20 @@ class RotaryPositionalEmbedding(torch.nn.Module):
         """Process an input tensor of shape (..., seq_len, d_k) and return a tensor of the same shape.
         Note that you should tolerate x with an arbitrary number of batch dimensions. You should
         assume that the token positions are a tensor of shape (..., seq_len) specifying the token
-        positions of x along the sequence dimension."""
+        positions of x along the sequence dimension.
+        
+        Run RoPE for a given input tensor.
+        Args:
+            x (Float[Tensor, "... sequence_len d_k"])
+            token_positions (Int[Tensor, "... sequence_len"])
+        Returns:
+            Float[Tensor, " ... sequence_length d_k"]: Tensor with RoPEd input.
+        """
 
         rotation_matrices_for_tokens = self.rotation_matrices[token_positions]
         # NOTE: "seq d_k d_k, ... seq d_k -> ... seq d_k" doesn't work
         return einsum(
             rotation_matrices_for_tokens,
             x,
-            "seq out d_k, ... seq d_k -> ... seq out"
+            "... seq d_k_1 d_k_2, ... seq d_k_2 -> ... seq d_k_1"
         )
