@@ -82,9 +82,7 @@ class MultiHeadSelfAttention(torch.nn.Module):
             V, "... seq_len (h d_head) -> ... h seq_len d_head", h=self.num_heads
         )
 
-        if token_positions is not None:
-            if self.rope is None:
-                raise ValueError("token position give, but RoPE is not set when initializing")
+        if self.rope is not None:
             Q = self.rope.forward(Q, token_positions)
             K = self.rope.forward(K, token_positions)
 

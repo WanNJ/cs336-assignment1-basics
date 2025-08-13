@@ -33,7 +33,7 @@ class RotaryPositionalEmbedding(torch.nn.Module):
         # TODO: Why register_buffer?
         self.register_buffer("rotation_matrix", self.rotation_matrices, persistent=False)
 
-    def forward(self, x: torch.Tensor, token_positions: torch.Tensor) -> torch.Tensor:
+    def forward(self, x: torch.Tensor, token_positions: torch.Tensor | None = None) -> torch.Tensor:
         """Process an input tensor of shape (..., seq_len, d_k) and return a tensor of the same shape.
         Note that you should tolerate x with an arbitrary number of batch dimensions. You should
         assume that the token positions are a tensor of shape (..., seq_len) specifying the token
@@ -46,6 +46,9 @@ class RotaryPositionalEmbedding(torch.nn.Module):
         Returns:
             Float[Tensor, " ... sequence_length d_k"]: Tensor with RoPEd input.
         """
+        seq_len = x.shape[-2]
+        if token_positions is None:
+            token_positions = torch.arange(seq_len, device=x.device)
 
         rotation_matrices_for_tokens = self.rotation_matrices[token_positions]
         # NOTE: "seq d_k d_k, ... seq d_k -> ... seq d_k" doesn't work

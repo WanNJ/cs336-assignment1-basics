@@ -17,6 +17,7 @@ from cs336_basics.normalization import RMSNorm
 from cs336_basics.ffn import SwiGLU
 from cs336_basics.rope import RotaryPositionalEmbedding
 from cs336_basics.attention import softmax, scaled_dot_product_attention, MultiHeadSelfAttention
+from cs336_basics.transformer import TransformerBlock
 
 def run_linear(
     d_in: int,
@@ -93,8 +94,8 @@ def run_swiglu(
     # swiglu.w2.weight.data = w2_weight
     # swiglu.w3.weight.data = w3_weight
     swiglu = SwiGLU(d_model, d_ff)
-    swiglu.load_state_dict({"w1_weight": w1_weight, "w2_weight": w2_weight, "w3_weight": w3_weight})
-    return swiglu.forward(in_features)
+    swiglu.load_state_dict({"w1.weights": w1_weight, "w2.weights": w2_weight, "w3.weights": w3_weight})
+    return swiglu(in_features)
 
 
 def run_scaled_dot_product_attention(
@@ -312,7 +313,20 @@ def run_transformer_block(
         Float[Tensor, "batch sequence_length d_model"] Tensor with the output of
         running the Transformer block on the input features while using RoPE.
     """
-    raise NotImplementedError
+    transformer_block = TransformerBlock(d_model, num_heads, d_ff, theta, max_seq_len)
+    transformer_block.load_state_dict({
+        "rms_norm1.weights": weights["ln1.weight"],
+        "rms_norm2.weights": weights["ln2.weight"],
+        "multihead_attention.W_Q.weights": weights["attn.q_proj.weight"],
+        "multihead_attention.W_K.weights": weights["attn.k_proj.weight"],
+        "multihead_attention.W_V.weights": weights["attn.v_proj.weight"],
+        "multihead_attention.W_O.weights": weights["attn.output_proj.weight"],
+        "ffn.w1.weights": weights["ffn.w1.weight"],
+        "ffn.w2.weights": weights["ffn.w2.weight"],
+        "ffn.w3.weights": weights["ffn.w3.weight"]
+    })
+
+    return transformer_block(in_features)
 
 
 def run_transformer_lm(
