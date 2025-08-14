@@ -17,7 +17,7 @@ from cs336_basics.normalization import RMSNorm
 from cs336_basics.ffn import SwiGLU
 from cs336_basics.rope import RotaryPositionalEmbedding
 from cs336_basics.attention import softmax, scaled_dot_product_attention, MultiHeadSelfAttention
-from cs336_basics.transformer import TransformerBlock
+from cs336_basics.transformer import TransformerBlock, TransformerLM
 
 def run_linear(
     d_in: int,
@@ -408,7 +408,34 @@ def run_transformer_lm(
         Float[Tensor, "batch_size sequence_length vocab_size"]: Tensor with the predicted unnormalized
         next-word distribution for each token.
     """
-    raise NotImplementedError
+    transformer_lm = TransformerLM(
+        vocab_size, 
+        context_length, 
+        d_model, 
+        num_layers, 
+        num_heads,
+        d_ff,
+        rope_theta
+    )
+    state_dict = {
+        "embedding.weights": weights["token_embeddings.weight"],
+        "norm.weights": weights["ln_final.weight"],
+        "linear.weights": weights["lm_head.weight"]
+    }
+    for i in range(num_layers):
+        state_dict.update({
+            f"transformer_blocks.{i}.rms_norm1.weights": weights[f"layers.{i}.ln1.weight"],
+            f"transformer_blocks.{i}.rms_norm2.weights": weights[f"layers.{i}.ln2.weight"],
+            f"transformer_blocks.{i}.multihead_attention.W_Q.weights": weights[f"layers.{i}.attn.q_proj.weight"],
+            f"transformer_blocks.{i}.multihead_attention.W_K.weights": weights[f"layers.{i}.attn.k_proj.weight"],
+            f"transformer_blocks.{i}.multihead_attention.W_V.weights": weights[f"layers.{i}.attn.v_proj.weight"],
+            f"transformer_blocks.{i}.multihead_attention.W_O.weights": weights[f"layers.{i}.attn.output_proj.weight"],
+            f"transformer_blocks.{i}.ffn.w1.weights": weights[f"layers.{i}.ffn.w1.weight"],
+            f"transformer_blocks.{i}.ffn.w2.weights": weights[f"layers.{i}.ffn.w2.weight"],
+            f"transformer_blocks.{i}.ffn.w3.weights": weights[f"layers.{i}.ffn.w3.weight"]
+        })
+    transformer_lm.load_state_dict(state_dict)
+    return transformer_lm(in_indices)
 
 
 def run_rmsnorm(
