@@ -21,6 +21,28 @@ def cross_entropy(inputs: Float[torch.Tensor, " batch_size vocab_size"], targets
     return target_log_probs.mean()
 
 
+def get_lr_cosine_schedule(t: int, alpha_max, alpha_min, Tw, Tc):
+    """In training Transformers, it is typical to use a learning rate schedule, where we start with a bigger learning
+    rate, making quicker updates in the beginning, and slowly decay it to a smaller value as the model trains
+    """
+    if t < Tw:
+        return t * alpha_max / Tw
+    elif Tw <= t <= Tc:
+        return alpha_min + (1 + np.cos(np.pi * (t - Tw) / (Tc - Tw))) * (alpha_max - alpha_min) / 2
+    else:
+        return alpha_min
+
+
+def gradient_clipping(parameters: Iterable[torch.nn.Parameter], max_l2_norm: float):
+    p_grads = [p.grad for p in parameters if p.grad is not None]
+    l2_norm = torch.sqrt(sum([torch.sum(g.pow(2)) for g in p_grads]))
+
+    if l2_norm > max_l2_norm:
+        scale_down_factor = max_l2_norm / (l2_norm + 1e-6)
+        for g in p_grads:
+            g *= scale_down_factor
+
+
 class SGD(torch.optim.Optimizer):
     """Implements Stochastic Gradient Descent."""
     def __init__(self, params, lr=1e-3):
