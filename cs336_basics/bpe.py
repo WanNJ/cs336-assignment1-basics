@@ -8,7 +8,7 @@ from collections.abc import Iterable, Iterator
 import regex as re
 
 from cs336_basics.chunking import find_chunk_boundaries
-from cs336_basics.data_type_utils import bytes_to_tuple
+from cs336_basics.data import bytes_to_tuple
 
 
 PAT = PAT = r"""'(?:[sdmt]|ll|ve|re)| ?\p{L}+| ?\p{N}+| ?[^\s\p{L}\p{N}]+|\s+(?!\S)|\s+"""
@@ -24,13 +24,12 @@ def train_bpe(
     input_path: str,
     vocab_size: int,
     special_tokens: list[str],
-):
-    """_summary_
+) -> tuple[dict[int, bytes], list]:
+    """Train BPE tokenizer.
 
-    Args:
-        input_path (str): _description_
-        vocab_size (int): _description_
-        special_tokens (list[str]): NOTE: why special token? What are some other examples?
+    Returns:
+        vocab: token id to bytes mapping.
+        merges: bytes pair generated during training.
     """
     # NOTE: mode = 'rb' is crucial.
     with open(input_path, "rb") as f:
@@ -44,6 +43,8 @@ def train_bpe(
     # Synchronize processes and get results.
     with Pool(processes=NUM_PROCESSES) as pool:
         count_results = pool.starmap(get_pre_token_count, task_args, chunksize=1)
+
+    print("Finished pre-tokenization.")
 
     # Merge pre tokenization results.
     merged_token_counts = defaultdict(int)
@@ -75,6 +76,10 @@ def train_bpe(
             break
         merges.append(merged_pair)
         left_vocab_slots -= 1
+
+        # Print progress.
+        if left_vocab_slots % 100 == 0:
+            print(f"{left_vocab_slots} merges remain to be performed.")
 
     return get_vocabulary(merges, special_tokens), merges
 
@@ -265,23 +270,17 @@ if __name__ == "__main__":
     import time
     starttime = time.time()
     vocab, merges = train_bpe(
-        "/Users/jackwan/workspace/cs336/assignment1-basics/data/TinyStoriesV2-GPT4-train.txt",
-        10000,
+        "/Users/jackwan/workspace/cs336/assignment1-basics/data/owt_train.txt",
+        32000,
         special_tokens=["<|endoftext|>"]
     )
     endtime = time.time()
     print(f"Finished. Took {endtime - starttime} seconds.")
     print(f"Longest word in vocabulary: {max(vocab.values(), key=lambda x: len(x))}")
-    print(f"Top 3 merges: {merges[:3]}")
+    print(f"Top 10 merges: {merges[:10]}")
 
-    import pickle
-    with open('experiments/tiny_story_trained_vocab.pkl', 'wb') as file:
-        pickle.dump(vocab, file)
-    with open('experiments/tiny_story_trained_merges.pkl', 'wb') as file:
-        pickle.dump(merges, file)
-
-    # vocab = {0: b' ', 1: b'a', 2: b'c', 3: b'e', 4: b'h', 5: b't', 6: b'th', 7: b' c', 8: b' a', 9: b'the', 10: b' at'}
-    # merges = [(b't', b'h'), (b' ', b'c'), (b' ', b'a'), (b'th', b'e'), (b' a', b't')]
-    # tokenizer = Tokenizer(vocab=vocab, merges=merges, special_tokens=['<|endoftext|>'])
-    # encoded = tokenizer.encode('the cat ate <|endoftext|>')
-    # print(tokenizer.decode(encoded))
+    # import pickle
+    # with open('results/bpe/owt_trained_vocab.pkl', 'wb') as file:
+    #     pickle.dump(vocab, file)
+    # with open('results/bpe/owt_trained_merges.pkl', 'wb') as file:
+    #     pickle.dump(merges, file)
