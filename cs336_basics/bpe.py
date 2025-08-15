@@ -1,4 +1,5 @@
 """Module that implements Byte Pair Encoding/Decoding"""
+from copy import copy
 import os
 from collections import defaultdict
 from multiprocessing import Pool, cpu_count
@@ -40,7 +41,7 @@ def train_bpe(
     for start, end in zip(boundaries[:-1], boundaries[1:]):
         task_args.append((input_path, start, end, special_tokens))
 
-    # Synchronized and get results.
+    # Synchronize processes and get results.
     with Pool(processes=NUM_PROCESSES) as pool:
         count_results = pool.starmap(get_pre_token_count, task_args, chunksize=1)
 
@@ -50,6 +51,15 @@ def train_bpe(
         for token_tuple, num in token_count.items():
             merged_token_counts[token_tuple] += num
 
+    # Create byte pair --> pretoken index cache
+    # NOTE: crucial step to optimize BPE. Could provide 10x performance gain.
+    byte_pair_count = defaultdict(int)
+    byte_pair_index = defaultdict(set)
+    for token_bytes in merged_token_counts.keys():
+        for b1, b2 in zip(token_bytes, token_bytes[1:]):
+            byte_pair_count[(b1, b2)] += merged_token_counts[token_bytes]
+            byte_pair_index[(b1, b2)].add(token_bytes)
+            
     # Train BPE
     left_vocab_slots = vocab_size
     left_vocab_slots -= (256 + len(special_tokens))
@@ -57,13 +67,12 @@ def train_bpe(
     while left_vocab_slots > 0:
         # Merges most frequent pairs and update pre-token count.
         try:
-            merged_pair, new_token_count = bpe_merge(
-                merged_token_counts
+            merged_pair = bpe_merge(
+                merged_token_counts, byte_pair_count, byte_pair_index
             )
         except NoMoreMerges:
             print(f"BPE merge stopped with {left_vocab_slots} merges left")
             break
-        merged_token_counts = new_token_count
         merges.append(merged_pair)
         left_vocab_slots -= 1
 
@@ -120,25 +129,45 @@ def merge_pretoken_tuple(byte_tuple: tuple[bytes], merge: tuple[bytes], merged_b
 
 
 def bpe_merge(
-    token_counts: dict[tuple[bytes], int]
+    token_counts: dict[tuple[bytes], int],
+    byte_pair_count: dict[tuple[bytes, bytes], int],
+    byte_pair_index: dict[tuple[bytes, bytes], set]
 ):
-    # TODO: Could this function be optimized? Figure it out.
-    bytes_pair_count = count_byte_pair(token_counts)
+    """Perform one step of BPE merge.
 
-    if not bytes_pair_count:
+    IMPORTANT: This function updates the three parameters in-place.
+    """
+    # TODO: Fix this termination logic.
+    if not byte_pair_count:
         raise NoMoreMerges('No more merges needed.')
 
     # deterministically break ties in pair frequency by
     # preferring the lexicographically greater pair
-    most_frequent_pair = max(bytes_pair_count, key=lambda x: (bytes_pair_count.get(x), x))
+    most_frequent_pair = max(byte_pair_count, key=lambda x: (byte_pair_count.get(x), x))
     merged_pair_bytes = b''.join(most_frequent_pair)
 
-    new_token_counts = defaultdict(int)
-    for token_tuple in token_counts:
+    affected_tokens = byte_pair_index[most_frequent_pair]
+    for token_tuple in copy(affected_tokens):
         new_token_tuple = merge_pretoken_tuple(token_tuple, most_frequent_pair, merged_pair_bytes)
-        new_token_counts[new_token_tuple] = token_counts[token_tuple]
+        assert new_token_tuple != token_tuple
 
-    return most_frequent_pair, new_token_counts
+        # Update bytes pair count and index.
+        for b1, b2 in zip(token_tuple, token_tuple[1:]):
+            byte_pair_count[(b1, b2)] -= token_counts[token_tuple]
+            # NOTE: do not use remove, otherwise KeyError might occur.
+            byte_pair_index[(b1, b2)].discard(token_tuple)
+        for b1, b2 in zip(new_token_tuple, new_token_tuple[1:]):
+            byte_pair_count[(b1, b2)] += token_counts[token_tuple]
+            byte_pair_index[(b1, b2)].add(new_token_tuple)
+
+        # Update token bytes tuple after merge.
+        token_counts[new_token_tuple] = token_counts[token_tuple]
+        # NOTE: Deletion has to be the last step because we accessed token_counts[token_tuple] in previous steps.
+        del token_counts[token_tuple]
+
+    # After merge, the count of previously most frequent pair should go to zero.
+    assert byte_pair_count[most_frequent_pair] == 0
+    return most_frequent_pair
 
 
 def count_byte_pair(token_counts: dict[tuple[bytes], int]) -> dict[tuple[bytes, bytes], int]:
@@ -233,22 +262,26 @@ class Tokenizer:
 
 
 if __name__ == "__main__":
-    # vocab, merges = train_bpe(
-    #     "/Users/jackwan/workspace/cs336/assignment1-basics/tests/fixtures/corpus.en",
-    #     500,
-    #     special_tokens=["<|endoftext|>"]
-    # )
-    # print(f"Longest word in vocabulary: {max(vocab.values(), key=lambda x: len(x))}")
-    # print(f"Top 3 merges: {merges[:3]}")
+    import time
+    starttime = time.time()
+    vocab, merges = train_bpe(
+        "/Users/jackwan/workspace/cs336/assignment1-basics/data/TinyStoriesV2-GPT4-train.txt",
+        10000,
+        special_tokens=["<|endoftext|>"]
+    )
+    endtime = time.time()
+    print(f"Finished. Took {endtime - starttime} seconds.")
+    print(f"Longest word in vocabulary: {max(vocab.values(), key=lambda x: len(x))}")
+    print(f"Top 3 merges: {merges[:3]}")
 
-    # import pickle
-    # with open('trained_vocab.pkl', 'wb') as file:
-    #     pickle.dump(vocab, file)
-    # with open('trained_merges.pkl', 'wb') as file:
-    #     pickle.dump(merges, file)
+    import pickle
+    with open('experiments/tiny_story_trained_vocab.pkl', 'wb') as file:
+        pickle.dump(vocab, file)
+    with open('experiments/tiny_story_trained_merges.pkl', 'wb') as file:
+        pickle.dump(merges, file)
 
-    vocab = {0: b' ', 1: b'a', 2: b'c', 3: b'e', 4: b'h', 5: b't', 6: b'th', 7: b' c', 8: b' a', 9: b'the', 10: b' at'}
-    merges = [(b't', b'h'), (b' ', b'c'), (b' ', b'a'), (b'th', b'e'), (b' a', b't')]
-    tokenizer = Tokenizer(vocab=vocab, merges=merges, special_tokens=['<|endoftext|>'])
-    encoded = tokenizer.encode('the cat ate <|endoftext|>')
-    print(tokenizer.decode(encoded))
+    # vocab = {0: b' ', 1: b'a', 2: b'c', 3: b'e', 4: b'h', 5: b't', 6: b'th', 7: b' c', 8: b' a', 9: b'the', 10: b' at'}
+    # merges = [(b't', b'h'), (b' ', b'c'), (b' ', b'a'), (b'th', b'e'), (b' a', b't')]
+    # tokenizer = Tokenizer(vocab=vocab, merges=merges, special_tokens=['<|endoftext|>'])
+    # encoded = tokenizer.encode('the cat ate <|endoftext|>')
+    # print(tokenizer.decode(encoded))
