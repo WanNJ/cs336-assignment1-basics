@@ -3,7 +3,9 @@
 data/
 **/profile.html
 **/profile.json
-experiments/
+
+# For training logging.
+wandb/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

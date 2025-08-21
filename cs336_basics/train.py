@@ -18,6 +18,7 @@ import json
 import logging
 import os
 from pathlib import Path
+from datetime import datetime
 
 import numpy as np
 import torch
@@ -147,13 +148,13 @@ def train_model(config: dict):
     # Initialize wandb if configured
     if config.get("use_wandb"):
         wandb.init(
-            project=config.get("wandb_project", "transformer-training"),
+            project=config.get("wandb_project", "cs336-assignment-1"),
             config=config,
-            name=config.get("experiment_name"),
+            name=datetime.now().strftime("%Y-%m-%d %H:%M"),
             resume="allow" if config.get("resume_from_checkpoint") else None
         )
         wandb.watch(model)
-    
+
     # Training loop
     model.train()
     logging.info("Starting training...")
@@ -243,9 +244,9 @@ def create_default_config() -> dict:
     """Create default configuration."""
     return {
         # Model hyperparameters - Transformer architecture
-        "vocab_size": 50257,      # Vocabulary size
-        "context_length": 1024,   # Maximum sequence length
-        "d_model": 768,          # Model dimensionality
+        "vocab_size": 10000,      # Vocabulary size
+        "context_length": 256,   # Maximum sequence length
+        "d_model": 512,          # Model dimensionality
         "num_layers": 12,        # Number of transformer blocks
         "num_heads": 12,         # Number of attention heads
         "d_ff": 3072,            # Feed-forward network hidden size
@@ -264,7 +265,7 @@ def create_default_config() -> dict:
         "num_iterations": 10000,        # Total training iterations
         "warmup_iterations": 2000,      # Learning rate warmup period
         "gradient_clip_norm": 1.0,      # Gradient clipping: max L2 norm
-        
+
         # Data paths
         "train_data_path": "train_data.npy",
         "val_data_path": "val_data.npy",
@@ -279,7 +280,6 @@ def create_default_config() -> dict:
         # Wandb configuration
         "use_wandb": False,
         "wandb_project": "transformer-training",
-        "experiment_name": None,
         
         # Other
         "device": get_device(),
@@ -290,7 +290,7 @@ def main():
     parser = argparse.ArgumentParser(description="Train a Transformer language model")
     parser.add_argument("--config", type=str, help="Path to configuration JSON file")
     parser.add_argument("--train-data", type=str, help="Path to training data file")
-    parser.add_argument("--val-data", type=str, help="Path to validation data file") 
+    parser.add_argument("--val-data", type=str, help="Path to validation data file")
     parser.add_argument("--checkpoint-dir", type=str, help="Directory to save checkpoints")
     parser.add_argument("--resume", type=str, help="Path to checkpoint to resume from")
     parser.add_argument("--batch-size", type=int, help="Batch size")

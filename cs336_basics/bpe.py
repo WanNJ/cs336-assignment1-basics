@@ -1,4 +1,5 @@
 """Module that implements Byte Pair Encoding/Decoding"""
+import pickle
 from copy import copy
 import os
 from collections import defaultdict
@@ -222,10 +223,15 @@ class Tokenizer:
         """Class method that constructs and return a Tokenizer from a serialized vocabulary and list of merges
         (in the same format that your BPE training code output) and (optionally) a list of special
         tokens."""
-        pass
+        with open(vocab_filepath, 'rb') as vocab_file:
+            vocab = pickle.load(vocab_file)
+        with open(merges_filepath, 'rb') as merges_file:
+            merges = pickle.load(merges_file)
+        return cls(vocab, merges, special_tokens)
 
     def encode(self, text: str) -> list[int]:
         """Encode an input text into a sequence of token IDs."""
+        # TODO: Optimize encoding performance, too slow.
         encoded_token_ids = []
         pattern = '|'.join(map(re.escape,  self.special_tokens))
         segments = re.split(f"({pattern})", text) if self.special_tokens else [text]
