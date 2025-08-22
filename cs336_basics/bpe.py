@@ -273,6 +273,14 @@ class Tokenizer:
                     encoded_token_ids.append(self.token_id_map[merged_bytes])
         return encoded_token_ids
 
+    def _encode_chunk(self, file_path, start: int, end: int):
+        with open(file_path, "rb") as f:
+            f.seek(start)
+            # Read only the needed byte range
+            chunk = f.read(end - start)
+
+        return self.encode(chunk.decode("utf-8"))
+
     def encode_iterable(self, iterable: Iterable[str]) -> Iterator[int]:
         """Given an iterable of strings (e.g., a Python file handle), return a generator
         that lazily yields token IDs. This is required for memory-efficient tokenization of
@@ -289,22 +297,16 @@ class Tokenizer:
             result_bytes += self.bytes_map[token_id]
         return result_bytes.decode('utf-8', errors='replace')
 
+    def encode_file_parallelized(self, input_path: str) -> list[int]:
+        with open(input_path, "rb") as f:
+            boundaries = find_chunk_boundaries(f, NUM_PROCESSES, b"<|endoftext|>")
 
-if __name__ == "__main__":
-    import time
-    starttime = time.time()
-    vocab, merges = train_bpe(
-        "/Users/jackwan/workspace/cs336/assignment1-basics/data/owt_train.txt",
-        32000,
-        special_tokens=["<|endoftext|>"]
-    )
-    endtime = time.time()
-    print(f"Finished. Took {endtime - starttime} seconds.")
-    print(f"Longest word in vocabulary: {max(vocab.values(), key=lambda x: len(x))}")
-    print(f"Top 10 merges: {merges[:10]}")
+        task_args = []
+        for start, end in zip(boundaries[:-1], boundaries[1:]):
+            task_args.append((input_path, start, end))
 
-    # import pickle
-    # with open('results/bpe/owt_trained_vocab.pkl', 'wb') as file:
-    #     pickle.dump(vocab, file)
-    # with open('results/bpe/owt_trained_merges.pkl', 'wb') as file:
-    #     pickle.dump(merges, file)
+        # Synchronize processes and get results.
+        with Pool(processes=NUM_PROCESSES) as pool:
+            token_ids = pool.starmap(self._encode_chunk, task_args, chunksize=1)
+
+        return sum(token_ids, [])

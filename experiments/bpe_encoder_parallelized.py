@@ -11,15 +11,18 @@ BPE_PATH = PROJECT_PATH / "results/bpe"
 DATA_PATH = PROJECT_PATH / "data"
 
 
-def benchmark_tokenizer(tokenizer: Tokenizer, text, bytes_size):
+def benchmark_tokenizer(tokenizer: Tokenizer, input_path):
+    bytes_size = os.path.getsize(input_path)
+
     start = time.perf_counter()
-    encoded = tokenizer.encode(text)
+    encoded = tokenizer.encode_file_parallelized(input_path)
     end = time.perf_counter()
+
     execution_time = end - start
-    throughput_kbps = bytes_size / execution_time / 1e3  # Convert to KB/s
+    throughput_mbps = bytes_size / execution_time / 1e6  # Convert to KB/s
     encoded = np.array(encoded, dtype=np.uint16)
     print(f"Compression ratio = {bytes_size} / {len(encoded)} = {bytes_size / len(encoded):.2f}")
-    print(f"Throughput = {throughput_kbps:.2f} KB / second\n")
+    print(f"Throughput = {throughput_mbps:.2f} MB / second\n")
 
 
 if __name__ == "__main__":
@@ -37,18 +40,12 @@ if __name__ == "__main__":
         ["<|endoftext|>"]
     )
 
-    with open(tinystory_data_path, "r") as file:
-        tinystory_text = file.read()
-    tinystory_bytes_size = os.path.getsize(tinystory_data_path)
     print("Benchmarking TinyStory Tokenizer on TinyStory data:")
-    benchmark_tokenizer(tinystory_tokenizer, tinystory_text, tinystory_bytes_size)
+    benchmark_tokenizer(tinystory_tokenizer, tinystory_data_path)
     print("Benchmarking OWT Tokenizer on TinyStory data:")
-    benchmark_tokenizer(owt_tokenizer, tinystory_text, tinystory_bytes_size)
+    benchmark_tokenizer(owt_tokenizer, tinystory_data_path)
 
-    with open(owt_data_path, "r") as file:
-        owt_text = file.read()
-    owt_bytes_size = os.path.getsize(owt_data_path)
     print("Benchmarking TinyStory Tokenizer on OWT data:")
-    benchmark_tokenizer(tinystory_tokenizer, owt_text, owt_bytes_size)
+    benchmark_tokenizer(tinystory_tokenizer, owt_data_path)
     print("Benchmarking OWT Tokenizer with {data_path}:")
-    benchmark_tokenizer(owt_tokenizer, owt_text, owt_bytes_size)
+    benchmark_tokenizer(owt_tokenizer, owt_data_path)
