@@ -11,7 +11,7 @@ BPE_PATH = PROJECT_PATH / "results/bpe"
 DATA_PATH = PROJECT_PATH / "data"
 
 
-def benchmark_tokenizer(tokenizer, text, bytes_size):
+def benchmark_tokenizer(tokenizer: Tokenizer, text, bytes_size):
     start = time.perf_counter()
     encoded = tokenizer.encode(text)
     end = time.perf_counter()
@@ -19,12 +19,12 @@ def benchmark_tokenizer(tokenizer, text, bytes_size):
     throughput_kbps = bytes_size / execution_time / 1e3  # Convert to KB/s
     encoded = np.array(encoded, dtype=np.uint16)
     print(f"Compression ratio = {bytes_size} / {len(encoded)} = {bytes_size / len(encoded):.2f}")
-    print(f"Throughput = {throughput_kbps:.2f} KB / second")
+    print(f"Throughput = {throughput_kbps:.2f} KB / second\n")
 
 
 if __name__ == "__main__":
-    # data_path = DATA_PATH / "owt_sample.txt"
-    data_path = DATA_PATH / "TinyStories-sample.txt"
+    owt_data_path = DATA_PATH / "owt_sample.txt"
+    tinystory_data_path = DATA_PATH / "TinyStories-sample.txt"
 
     tinystory_tokenizer = Tokenizer.from_files(
         BPE_PATH / "tiny_story_trained_vocab.pkl",
@@ -37,12 +37,18 @@ if __name__ == "__main__":
         ["<|endoftext|>"]
     )
 
-    with open(data_path, "r") as file:
-        target_text = file.read()
-    bytes_size = os.path.getsize(data_path)
+    with open(owt_data_path, "r") as file:
+        owt_text = file.read()
+    owt_bytes_size = os.path.getsize(owt_data_path)
+    print("Benchmarking TinyStory Tokenizer on OWT data:")
+    benchmark_tokenizer(tinystory_tokenizer, owt_text, owt_bytes_size)
+    print("Benchmarking OWT Tokenizer with {data_path}:")
+    benchmark_tokenizer(owt_tokenizer, owt_text, owt_bytes_size)
 
-    print(f"Benchmarking TinyStory Tokenizer with {data_path}:")
-    benchmark_tokenizer(tinystory_tokenizer, target_text, bytes_size)
-
-    print(f"\nBenchmarking OWT Tokenizer with {data_path}:")
-    benchmark_tokenizer(owt_tokenizer, target_text, bytes_size)
+    with open(tinystory_data_path, "r") as file:
+        tinystory_text = file.read()
+    tinystory_bytes_size = os.path.getsize(tinystory_data_path)
+    print("Benchmarking TinyStory Tokenizer on TinyStory data:")
+    benchmark_tokenizer(tinystory_tokenizer, tinystory_text, tinystory_bytes_size)
+    print("Benchmarking OWT Tokenizer on TinyStory data:")
+    benchmark_tokenizer(owt_tokenizer, tinystory_text, tinystory_bytes_size)
