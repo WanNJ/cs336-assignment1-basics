@@ -207,12 +207,12 @@ class Tokenizer:
             for special_token in special_tokens:
                 special_token_bytes = special_token.encode(STRING_ENCODING)
                 if special_token_bytes not in vocab.values():
-                    # print(f"WARNING: vocabulary does not contain {special_token} initially.")
+                    print(f"WARNING: vocabulary does not contain {special_token} initially.")
                     vocab[len(vocab)] = special_token_bytes
 
-        self.bytes_map = vocab
-        self.token_id_map = {bytes: token_id for token_id, bytes in vocab.items()}
-        self.merges = merges
+        self.bytes_map: dict[int, bytes] = vocab
+        self.token_id_map: dict[bytes, int] = {bytes: token_id for token_id, bytes in vocab.items()}
+        self.merge_ranks: dict[tuple, int] = {merges[i]: i for i in range(len(merges))}
         self.special_tokens = special_tokens
         if special_tokens is None:
             self.special_tokens = []
@@ -234,6 +234,7 @@ class Tokenizer:
         # TODO: Optimize encoding performance, too slow.
         encoded_token_ids = []
         pattern = '|'.join(map(re.escape,  self.special_tokens))
+        # NOTE: the pattern is in () to preserve the special tokens in the result.
         segments = re.split(f"({pattern})", text) if self.special_tokens else [text]
 
         for segment in segments:
@@ -243,14 +244,31 @@ class Tokenizer:
             for match in re.finditer(PAT, segment):
                 pretoken_bytes = match.group().encode(STRING_ENCODING)
                 pretoken_byte_tuple = bytes_to_tuple(pretoken_bytes)
-                for merge in self.merges:
+
+                # NOTE: O(len(token) ^ 2)
+                while len(pretoken_byte_tuple) > 1:
+                    # Find the highest priority merge in the pretoken.
+                    # NOTE: O(len(token))
+                    bytes_pairs = zip(pretoken_byte_tuple, pretoken_byte_tuple[1:])
+                    min_rank = float("inf")
+                    merge = None
+                    for pair in bytes_pairs:
+                        rank = self.merge_ranks.get(pair, float("inf"))
+                        # float("inf") < float("inf") is False
+                        if rank < min_rank:
+                            min_rank = rank
+                            merge = pair
+                    # If no valid ranked pair is present, we're done.
+                    if merge is None:
+                        break
+                    # Merge the highest priority pair.
+                    # NOTE: O(len(token))
                     pretoken_byte_tuple = merge_pretoken_tuple(
-                        pretoken_byte_tuple, 
+                        pretoken_byte_tuple,
                         merge, 
                         b''.join(merge)
                     )
-                    if len(pretoken_byte_tuple) < 2:
-                        break
+
                 for merged_bytes in pretoken_byte_tuple:
                     encoded_token_ids.append(self.token_id_map[merged_bytes])
         return encoded_token_ids

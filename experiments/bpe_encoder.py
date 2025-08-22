@@ -16,15 +16,15 @@ def benchmark_tokenizer(tokenizer, text, bytes_size):
     encoded = tokenizer.encode(text)
     end = time.perf_counter()
     execution_time = end - start
-    throughput_mbps = bytes_size / execution_time / 1e6  # Convert to MB/s
+    throughput_kbps = bytes_size / execution_time / 1e3  # Convert to KB/s
     encoded = np.array(encoded, dtype=np.uint16)
     print(f"Compression ratio = {bytes_size} / {len(encoded)} = {bytes_size / len(encoded):.2f}")
-    print(f"Throughput = {throughput_mbps:.2f} MB / second")
+    print(f"Throughput = {throughput_kbps:.2f} KB / second")
 
 
 if __name__ == "__main__":
-    data_path = DATA_PATH / "owt_sample.txt"
-    # data_path = DATA_PATH / "TinyStories-sample.txt"
+    # data_path = DATA_PATH / "owt_sample.txt"
+    data_path = DATA_PATH / "TinyStories-sample.txt"
 
     tinystory_tokenizer = Tokenizer.from_files(
         BPE_PATH / "tiny_story_trained_vocab.pkl",
@@ -41,8 +41,8 @@ if __name__ == "__main__":
         target_text = file.read()
     bytes_size = os.path.getsize(data_path)
 
-    print("Benchmarking TinyStory Tokenizer:")
+    print(f"Benchmarking TinyStory Tokenizer with {data_path}:")
     benchmark_tokenizer(tinystory_tokenizer, target_text, bytes_size)
 
-    print("\nBenchmarking OWT Tokenizer:")
+    print(f"\nBenchmarking OWT Tokenizer with {data_path}:")
     benchmark_tokenizer(owt_tokenizer, target_text, bytes_size)
