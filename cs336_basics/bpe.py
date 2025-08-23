@@ -1,5 +1,6 @@
 """Module that implements Byte Pair Encoding/Decoding"""
 import pickle
+import codecs
 from copy import copy
 import os
 from collections import defaultdict
@@ -15,6 +16,7 @@ from cs336_basics.data import bytes_to_tuple
 PAT = PAT = r"""'(?:[sdmt]|ll|ve|re)| ?\p{L}+| ?\p{N}+| ?[^\s\p{L}\p{N}]+|\s+(?!\S)|\s+"""
 STRING_ENCODING = 'utf-8'
 NUM_PROCESSES=cpu_count()
+CHUNK_BYTE_SIZE = 1024 * 1024 * 1024  # 1 GB
 
 # NOTE: multiprocess.Queue get(), put(), join(), possibility to deadlock
 
@@ -274,12 +276,25 @@ class Tokenizer:
         return encoded_token_ids
 
     def _encode_chunk(self, file_path, start: int, end: int):
+        buffer_size = 8192
+        decoder = codecs.getincrementaldecoder("utf-8")()
+        result = []
         with open(file_path, "rb") as f:
             f.seek(start)
-            # Read only the needed byte range
-            chunk = f.read(end - start)
+            remaining = end - start
 
-        return self.encode(chunk.decode("utf-8"))
+            while remaining > 0:
+                to_read = min(buffer_size, remaining)
+                raw = f.read(to_read)
+                if not raw:
+                    break
+                remaining -= len(raw)
+
+                # Decode safely, handling split UTF-8 sequences
+                text = decoder.decode(raw, final=(remaining == 0))
+
+                result.extend(self.encode(text))
+        return result
 
     def encode_iterable(self, iterable: Iterable[str]) -> Iterator[int]:
         """Given an iterable of strings (e.g., a Python file handle), return a generator
@@ -298,8 +313,18 @@ class Tokenizer:
         return result_bytes.decode('utf-8', errors='replace')
 
     def encode_file_parallelized(self, input_path: str) -> list[int]:
+        """Make it use less memory."""
+        file_size = os.path.getsize(input_path)
+        file_size_gb = file_size / 1024 / 1024 / 1024
+        if file_size <= NUM_PROCESSES * CHUNK_BYTE_SIZE:
+            num_chunks = NUM_PROCESSES
+            print(f"File size is {file_size_gb:.2f} GB using {num_chunks} chunks to encode.")
+        else:
+            num_chunks = file_size // CHUNK_BYTE_SIZE + 1
+            print(f"File size is {file_size_gb:.2f} GB, using {num_chunks} chunks to encode.")
+
         with open(input_path, "rb") as f:
-            boundaries = find_chunk_boundaries(f, NUM_PROCESSES, b"<|endoftext|>")
+            boundaries = find_chunk_boundaries(f, num_chunks, b"<|endoftext|>")
 
         task_args = []
         for start, end in zip(boundaries[:-1], boundaries[1:]):
