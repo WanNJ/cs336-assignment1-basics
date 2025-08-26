@@ -6,7 +6,7 @@ from cs336_basics.bpe import Tokenizer
 
 PROJECT_PATH = Path(__file__).resolve().parent.parent
 BPE_PATH = PROJECT_PATH / "results/bpe"
-DATA_PATH = PROJECT_PATH / "data"
+DATA_PATH = PROJECT_PATH / "data/raw"
 
 
 if __name__ == "__main__":

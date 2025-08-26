@@ -247,11 +247,11 @@ def create_default_config() -> dict:
         "vocab_size": 10000,      # Vocabulary size
         "context_length": 256,   # Maximum sequence length
         "d_model": 512,          # Model dimensionality
-        "num_layers": 12,        # Number of transformer blocks
-        "num_heads": 12,         # Number of attention heads
+        "num_layers": 4,         # Number of transformer blocks
+        "num_heads": 16,         # Number of attention heads
         "d_ff": 3072,            # Feed-forward network hidden size
         "rope_theta": 10000.0,   # RoPE (Rotary Position Embedding) theta parameter
-        
+
         # Optimizer hyperparameters - AdamW
         "learning_rate": 3e-4,      # AdamW: initial learning rate
         "min_learning_rate": 3e-5,  # Learning rate schedule: minimum LR
@@ -259,9 +259,9 @@ def create_default_config() -> dict:
         "beta1": 0.9,              # AdamW: first momentum coefficient
         "beta2": 0.95,             # AdamW: second momentum coefficient
         "eps": 1e-8,               # AdamW: numerical stability epsilon
-        
+
         # Training hyperparameters
-        "batch_size": 4,                # Training batch size
+        "batch_size": 32,               # Training batch size
         "num_iterations": 10000,        # Total training iterations
         "warmup_iterations": 2000,      # Learning rate warmup period
         "gradient_clip_norm": 1.0,      # Gradient clipping: max L2 norm

@@ -6,9 +6,9 @@ import numpy as np
 
 from cs336_basics.bpe import Tokenizer
 
-PROJECT_PATH = Path(__file__).resolve().parent.parent
+PROJECT_PATH = Path(__file__).resolve().parent.parent.parent
 BPE_PATH = PROJECT_PATH / "results/bpe"
-DATA_PATH = PROJECT_PATH / "data"
+DATA_PATH = PROJECT_PATH / "data/raw"
 
 
 def benchmark_tokenizer(tokenizer: Tokenizer, input_path, output_path):
@@ -27,7 +27,7 @@ def benchmark_tokenizer(tokenizer: Tokenizer, input_path, output_path):
     print(f"Throughput = {throughput_mbps:.2f} MB / second\n")
 
 
-def test_with_validation_data():
+def encode_validation_dataset():
     tinystory_tokenizer = Tokenizer.from_files(
         BPE_PATH / "tiny_story_trained_vocab.pkl",
         BPE_PATH / "tiny_story_trained_merges.pkl",
@@ -40,16 +40,10 @@ def test_with_validation_data():
     )
 
     tinystory_data_path = DATA_PATH / "TinyStoriesV2-GPT4-valid.txt"
-    print("Benchmarking TinyStory Tokenizer on TinyStory data:")
     benchmark_tokenizer(tinystory_tokenizer, tinystory_data_path, output_path="results/bpe/tinystory_valid_encoded.npy")
-    print("Benchmarking OWT Tokenizer on TinyStory data:")
-    benchmark_tokenizer(owt_tokenizer, tinystory_data_path, "results/bpe/owt_valid_encoded.npy")
 
     owt_data_path = DATA_PATH / "owt_valid.txt"
-    print("Benchmarking TinyStory Tokenizer on OWT data:")
-    benchmark_tokenizer(tinystory_tokenizer, owt_data_path, "results/bpe/tinystory_owt_encoded.npy")
-    print("Benchmarking OWT Tokenizer on OWT data:")
-    benchmark_tokenizer(owt_tokenizer, owt_data_path, "results/bpe/owt_owt_encoded.npy")
+    benchmark_tokenizer(owt_tokenizer, owt_data_path, "results/bpe/owt_valid_encoded.npy")
 
 
 def encode_train_dataset():
@@ -72,5 +66,5 @@ def encode_train_dataset():
 
 
 if __name__ == "__main__":
-    # test_with_validation_data()
-    encode_train_dataset()
+    encode_validation_dataset()
+    # encode_train_dataset()
