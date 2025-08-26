@@ -1,22 +1,24 @@
 """Module that implements Byte Pair Encoding/Decoding"""
-import pickle
-import codecs
-from copy import copy
 import os
+import pickle
+import tempfile
+from copy import copy
 from collections import defaultdict
 from multiprocessing import Pool, cpu_count
 from collections.abc import Iterable, Iterator
+import time
 
+import numpy as np
 import regex as re
 
 from cs336_basics.chunking import find_chunk_boundaries
-from cs336_basics.data import bytes_to_tuple
+from cs336_basics.data import bytes_to_tuple, combine_npy_files
 
 
 PAT = PAT = r"""'(?:[sdmt]|ll|ve|re)| ?\p{L}+| ?\p{N}+| ?[^\s\p{L}\p{N}]+|\s+(?!\S)|\s+"""
 STRING_ENCODING = 'utf-8'
 NUM_PROCESSES=cpu_count()
-CHUNK_BYTE_SIZE = 1024 * 1024 * 1024  # 1 GB
+CHUNK_BYTE_SIZE = 256 * 1024 * 1024  # 512 MB
 
 # NOTE: multiprocess.Queue get(), put(), join(), possibility to deadlock
 
@@ -231,6 +233,7 @@ class Tokenizer:
             merges = pickle.load(merges_file)
         return cls(vocab, merges, special_tokens)
 
+
     def encode(self, text: str) -> list[int]:
         """Encode an input text into a sequence of token IDs."""
         # TODO: Optimize encoding performance, too slow.
@@ -275,27 +278,6 @@ class Tokenizer:
                     encoded_token_ids.append(self.token_id_map[merged_bytes])
         return encoded_token_ids
 
-    def _encode_chunk(self, file_path, start: int, end: int):
-        buffer_size = 8192
-        decoder = codecs.getincrementaldecoder("utf-8")()
-        result = []
-        with open(file_path, "rb") as f:
-            f.seek(start)
-            remaining = end - start
-
-            while remaining > 0:
-                to_read = min(buffer_size, remaining)
-                raw = f.read(to_read)
-                if not raw:
-                    break
-                remaining -= len(raw)
-
-                # Decode safely, handling split UTF-8 sequences
-                text = decoder.decode(raw, final=(remaining == 0))
-
-                result.extend(self.encode(text))
-        return result
-
     def encode_iterable(self, iterable: Iterable[str]) -> Iterator[int]:
         """Given an iterable of strings (e.g., a Python file handle), return a generator
         that lazily yields token IDs. This is required for memory-efficient tokenization of
@@ -305,33 +287,55 @@ class Tokenizer:
             yield from self.encode(s)
 
     def decode(self, ids: list[int]) -> str:
-        result_bytes = b''
+        parts = []
         for token_id in ids:
             if token_id not in self.bytes_map:
                 raise ValueError(f"token_id {token_id} not in our vocabulary")
-            result_bytes += self.bytes_map[token_id]
-        return result_bytes.decode('utf-8', errors='replace')
+            parts.append(self.bytes_map[token_id])
+        return b"".join(parts).decode("utf-8", errors="replace")
 
-    def encode_file_parallelized(self, input_path: str) -> list[int]:
+    def _encode_chunk_to_file(self, file_path, start: int, end: int, out_dir: str):
+        """Encode a chunk of the file and write to a npy file."""
+        with open(file_path, "rb") as f:
+            f.seek(start)
+            text = f.read(end - start).decode("utf-8")
+
+        token_ids = self.encode(text)
+        arr = np.fromiter(token_ids, dtype=np.uint16)
+
+        # Write to unique file in tmpdir
+        fd, out_path = tempfile.mkstemp(suffix=".npy", dir=out_dir)
+        os.close(fd)  # just need path, NumPy will reopen
+        np.save(out_path, arr)
+        return out_path
+
+    def encode_file_parallelized(self, input_path: str, output_path: str):
         """Make it use less memory."""
         file_size = os.path.getsize(input_path)
-        file_size_gb = file_size / 1024 / 1024 / 1024
-        if file_size <= NUM_PROCESSES * CHUNK_BYTE_SIZE:
-            num_chunks = NUM_PROCESSES
-            print(f"File size is {file_size_gb:.2f} GB using {num_chunks} chunks to encode.")
-        else:
-            num_chunks = file_size // CHUNK_BYTE_SIZE + 1
-            print(f"File size is {file_size_gb:.2f} GB, using {num_chunks} chunks to encode.")
+        num_chunks = file_size // CHUNK_BYTE_SIZE + 1
+
+        file_size_mb = file_size / 1024 / 1024
 
         with open(input_path, "rb") as f:
             boundaries = find_chunk_boundaries(f, num_chunks, b"<|endoftext|>")
-
-        task_args = []
-        for start, end in zip(boundaries[:-1], boundaries[1:]):
-            task_args.append((input_path, start, end))
+        print(f"File size is {file_size_mb:.2f} MB, using {len(boundaries) - 1} chunks to encode.")
 
         # Synchronize processes and get results.
-        with Pool(processes=NUM_PROCESSES) as pool:
-            token_ids = pool.starmap(self._encode_chunk, task_args, chunksize=1)
+        with tempfile.TemporaryDirectory() as tmpdir:
+            print(f"Temp directory with intermediate files: {tmpdir}")
+            task_args = []
+            for start, end in zip(boundaries[:-1], boundaries[1:]):
+                task_args.append((input_path, start, end, tmpdir))
 
-        return sum(token_ids, [])
+            start_time = time.perf_counter()
+            with Pool(processes=NUM_PROCESSES) as pool:
+                npy_files = pool.starmap(
+                    self._encode_chunk_to_file,
+                    task_args,
+                    chunksize=1
+                )
+            end_time = time.perf_counter()  # End timing
+            elapsed_time = end_time - start_time
+            print(f"Time taken for parallel processing: {elapsed_time:.2f} seconds")
+
+            combine_npy_files(npy_files, output_path)

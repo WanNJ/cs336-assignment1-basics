@@ -45,7 +45,7 @@ if __name__ == "__main__":
     print("Benchmarking OWT Tokenizer on TinyStory data:")
     benchmark_tokenizer(owt_tokenizer, tinystory_text, tinystory_bytes_size)
 
-    with open(owt_data_path, "r") as file:
+    with open(owt_data_path) as file:
         owt_text = file.read()
     owt_bytes_size = os.path.getsize(owt_data_path)
     print("Benchmarking TinyStory Tokenizer on OWT data:")
