@@ -67,4 +67,4 @@ def encode_train_dataset():
 
 if __name__ == "__main__":
     encode_validation_dataset()
-    # encode_train_dataset()
+    encode_train_dataset()
