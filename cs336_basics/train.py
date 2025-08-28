@@ -82,7 +82,11 @@ def create_model(config: dict) -> TransformerLM:
     )
 
     if config["device"]:
-        model = model.to(config["device"])
+        model = model.to(device=config["device"])
+
+    # Speed up training by JIT-compiling your model
+    # Cuts the training time for about 20%.
+    # model = torch.compile(model, backend="aot_eager")
 
     return model
 
@@ -92,11 +96,12 @@ def evaluate_model(model: torch.nn.Module, val_dataset: np.ndarray, config: dict
     model.eval()
     total_loss = 0.0
     num_batches = config["val_batches"]
-    
+
     with torch.no_grad():
+        # TODO: do not use num_batches, go through all the data in val_dataset.
         for _ in range(num_batches):
             x_val, y_val = data_loading(
-                val_dataset, 
+                val_dataset,
                 config["batch_size"], 
                 config["context_length"], 
                 config["device"]
@@ -168,7 +173,7 @@ def train_model(config: dict):
             config["warmup_iterations"],  # Warmup period
             config["num_iterations"]      # Total iterations
         )
-        
+
         # Update learning rate
         for param_group in optimizer.param_groups:
             param_group["lr"] = lr
@@ -182,16 +187,18 @@ def train_model(config: dict):
         )
         
         optimizer.zero_grad()
+
         logits = model(x)
         loss = cross_entropy(logits.view(-1, logits.size(-1)), y.view(-1))
-        
-        # Backward pass
+
+        # Run backward pass, which computes gradients.
         loss.backward()
         
-        # Gradient clipping - prevent exploding gradients
+        # Gradient clipping, which prevents exploding gradients
         if config["gradient_clip_norm"] > 0:
             gradient_clipping(model.parameters(), config["gradient_clip_norm"])
-        
+
+        # Run optimizer step, which updates the parameters.
         optimizer.step()
         
         # Logging
@@ -262,8 +269,8 @@ def create_default_config() -> dict:
 
         # Training hyperparameters
         "batch_size": 32,               # Training batch size
-        "num_iterations": 10000,        # Total training iterations
-        "warmup_iterations": 2000,      # Learning rate warmup period
+        "num_iterations": 5000,        # Total training iterations
+        "warmup_iterations": 1000,      # Learning rate warmup period
         "gradient_clip_norm": 1.0,      # Gradient clipping: max L2 norm
 
         # Data paths

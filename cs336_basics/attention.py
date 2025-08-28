@@ -33,8 +33,8 @@ def scaled_dot_product_attention(
     d_k = Q.shape[-1]
     Qt_K = einsum(Q, K, "... seq1 d_k, ... seq2 d_k -> ... seq1 seq2")
     Qt_K = Qt_K / math.sqrt(d_k)
-    # NOTE: ... selects the extra dimensions, works even if mask only has two dimensions.
-    Qt_K[..., ~mask] = Qt_K[..., ~mask] - torch.inf
+    # NOTE: the function automatically broadcasts.
+    Qt_K = Qt_K.masked_fill(~mask, -torch.inf)
     return einsum(
         softmax(Qt_K, len(Qt_K.shape) - 1),
         V,
@@ -43,13 +43,14 @@ def scaled_dot_product_attention(
 
 
 class MultiHeadSelfAttention(torch.nn.Module):
-    def __init__(self, d_model: int, num_heads: int, rope: RotaryPositionalEmbedding | None = None):
+    def __init__(self, d_model: int, num_heads: int, rope: RotaryPositionalEmbedding | None = None, device=None):
         """Module to perform causal multi-head self-attention.
 
             d_model: int Dimensionality of the Transformer block inputs.
             num_heads: int Number of heads to use in multi-head self-attention.
         """
         super().__init__()
+        self.device = device
         self.d_model = d_model
         self.num_heads = num_heads
         self.rope = rope
@@ -89,7 +90,8 @@ class MultiHeadSelfAttention(torch.nn.Module):
             Q = self.rope.forward(Q, token_positions)
             K = self.rope.forward(K, token_positions)
 
-        casual_mask = torch.tril(torch.ones(seq_len, seq_len, dtype=torch.bool))
+        #TODO: optimize this line to store the casual_mask instead creating a new one every time.
+        casual_mask = torch.tril(torch.ones(seq_len, seq_len, dtype=torch.bool, device=self.device))
         output = scaled_dot_product_attention(Q, K, V, casual_mask)
         output = rearrange(
             output, "... h seq_len d_head ->  ... seq_len (h d_head)"

@@ -16,8 +16,10 @@ def data_loading(
     if len(dataset) < context_length + batch_size:
         raise ValueError(f"Not possible to generate {batch_size} unique samples.") 
 
+    # TODO: this is becoming bottleneck, optimize it.
     valid_indices = np.arange(len(dataset) - context_length)
     sampled_start_indices = np.random.choice(valid_indices, batch_size, replace=False)
+
     x = np.array([dataset[s:s+context_length] for s in sampled_start_indices])
     y = np.array([dataset[s+1:s+context_length+1] for s in sampled_start_indices])
 

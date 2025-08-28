@@ -24,7 +24,8 @@ class TransformerBlock(torch.nn.Module):
         self.multihead_attention = MultiHeadSelfAttention(
             d_model,
             num_heads,
-            RotaryPositionalEmbedding(theta, d_model // num_heads, max_seq_len, device)
+            RotaryPositionalEmbedding(theta, d_model // num_heads, max_seq_len, device),
+            device
         )
         self.ffn = SwiGLU(d_model, d_ff)
 
