@@ -17,14 +17,14 @@ class TransformerBlock(torch.nn.Module):
 
     Returns tensor with the predicted UN-NORMALIZED next-word distribution for each token.
     """
-    def __init__(self, d_model, num_heads, d_ff, theta, max_seq_len):
+    def __init__(self, d_model, num_heads, d_ff, theta, max_seq_len, device=None):
         super().__init__()
         self.rms_norm1 = RMSNorm(d_model)
         self.rms_norm2 = RMSNorm(d_model)
         self.multihead_attention = MultiHeadSelfAttention(
             d_model,
             num_heads,
-            RotaryPositionalEmbedding(theta, d_model // num_heads, max_seq_len)
+            RotaryPositionalEmbedding(theta, d_model // num_heads, max_seq_len, device)
         )
         self.ffn = SwiGLU(d_model, d_ff)
 
@@ -41,21 +41,23 @@ class TransformerLM(torch.nn.Module):
         num_layers: int,
         num_heads: int,
         d_ff: int,
-        rope_theta: float
+        rope_theta: float,
+        device=None
     ):
         super().__init__()
-        self.embedding = Embedding(vocab_size, d_model)
+        self.embedding = Embedding(vocab_size, d_model, device)
         self.transformer_blocks = torch.nn.Sequential(*[
             TransformerBlock(
                 d_model, 
                 num_heads,
                 d_ff,
                 rope_theta,
-                context_length
+                context_length,
+                device
             ) for _ in range(num_layers)
         ])
-        self.norm = RMSNorm(d_model)
-        self.linear = Linear(d_model, vocab_size)
+        self.norm = RMSNorm(d_model, device=device)
+        self.linear = Linear(d_model, vocab_size, device=device)
 
     def forward(self, in_indices: Int[torch.Tensor, " batch_size sequence_length"]):
         x = self.embedding(in_indices)

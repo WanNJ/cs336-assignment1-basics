@@ -3,6 +3,7 @@
 data/
 **/profile.html
 **/profile.json
+checkpoints/
 
 # For training logging.
 wandb/

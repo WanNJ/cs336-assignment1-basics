@@ -20,7 +20,15 @@ def data_loading(
     sampled_start_indices = np.random.choice(valid_indices, batch_size, replace=False)
     x = np.array([dataset[s:s+context_length] for s in sampled_start_indices])
     y = np.array([dataset[s+1:s+context_length+1] for s in sampled_start_indices])
-    return torch.tensor(x, device=device), torch.tensor(y, device=device)
+
+    x, y = torch.tensor(x, device=device), torch.tensor(y, device=device)
+
+    if device == "mps":
+        # Convert data type because Mac Chip does not support np.uint16
+        x = x.to(torch.int32)
+        y = y.to(torch.int32)
+
+    return x, y
 
 
 def save_checkpoint(

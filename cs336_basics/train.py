@@ -25,9 +25,9 @@ import torch
 import wandb
 from tqdm import tqdm
 
-from .data import data_loading, save_checkpoint, load_checkpoint
-from .optimizer import cross_entropy, get_lr_cosine_schedule, gradient_clipping, AdamW
-from .transformer import TransformerLM
+from cs336_basics.data import data_loading, save_checkpoint, load_checkpoint
+from cs336_basics.optimizer import cross_entropy, get_lr_cosine_schedule, gradient_clipping, AdamW
+from cs336_basics.transformer import TransformerLM
 
 
 def setup_logging(log_level: str = "INFO"):
@@ -58,7 +58,7 @@ def load_memmap_dataset(data_path: str) -> np.ndarray:
     
     # Try to load as memmap first, fall back to regular numpy if needed
     try:
-        dataset = np.memmap(data_path, dtype=np.int32, mode='r')
+        dataset = np.memmap(data_path, mode='r')
         logging.info(f"Loaded dataset with {len(dataset)} tokens using memory mapping")
     except Exception as e:
         logging.warning(f"Failed to load as memmap, falling back to regular numpy: {e}")
@@ -77,14 +77,13 @@ def create_model(config: dict) -> TransformerLM:
         num_layers=config["num_layers"],
         num_heads=config["num_heads"],
         d_ff=config["d_ff"],
-        rope_theta=config["rope_theta"]
+        rope_theta=config["rope_theta"],
+        device=config.get("device", None)
     )
-    
-    # Initialize weights
-    for p in model.parameters():
-        if p.dim() > 1:
-            torch.nn.init.xavier_uniform_(p)
-    
+
+    if config["device"]:
+        model = model.to(config["device"])
+
     return model
 
 
@@ -123,11 +122,12 @@ def train_model(config: dict):
     logging.info("Loading datasets...")
     train_dataset = load_memmap_dataset(config["train_data_path"])
     val_dataset = load_memmap_dataset(config["val_data_path"]) if config.get("val_data_path") else None
-    
+
     # Create model
     logging.info("Creating model...")
     model = create_model(config).to(device)
     logging.info(f"Model created with {sum(p.numel() for p in model.parameters())} parameters")
+    logging.info(f"Planning to train model for {config['batch_size'] * config['context_length'] * config['num_iterations']} tokens")
     
     # Setup optimizer - AdamW parameters
     optimizer = AdamW(
@@ -230,7 +230,7 @@ def train_model(config: dict):
 
 def load_config(config_path: str) -> dict:
     """Load configuration from JSON file."""
-    with open(config_path, 'r') as f:
+    with open(config_path) as f:
         config = json.load(f)
     
     # Set device if not specified
@@ -249,8 +249,8 @@ def create_default_config() -> dict:
         "d_model": 512,          # Model dimensionality
         "num_layers": 4,         # Number of transformer blocks
         "num_heads": 16,         # Number of attention heads
-        "d_ff": 3072,            # Feed-forward network hidden size
-        "rope_theta": 10000.0,   # RoPE (Rotary Position Embedding) theta parameter
+        "d_ff": 1344,            # Feed-forward network hidden size, roughly 8/3 d_model
+        "rope_theta": 10000,   # RoPE (Rotary Position Embedding) theta parameter
 
         # Optimizer hyperparameters - AdamW
         "learning_rate": 3e-4,      # AdamW: initial learning rate
@@ -269,7 +269,7 @@ def create_default_config() -> dict:
         # Data paths
         "train_data_path": "train_data.npy",
         "val_data_path": "val_data.npy",
-        
+
         # Logging and checkpointing
         "log_interval": 100,         # Log every N iterations
         "val_interval": 500,         # Validate every N iterations

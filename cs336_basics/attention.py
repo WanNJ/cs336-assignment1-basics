@@ -1,4 +1,5 @@
 import torch
+import math
 from jaxtyping import Float, Bool
 from einops import einsum, rearrange
 
@@ -31,7 +32,7 @@ def scaled_dot_product_attention(
     """
     d_k = Q.shape[-1]
     Qt_K = einsum(Q, K, "... seq1 d_k, ... seq2 d_k -> ... seq1 seq2")
-    Qt_K = Qt_K / torch.sqrt(torch.tensor([d_k]))
+    Qt_K = Qt_K / math.sqrt(d_k)
     # NOTE: ... selects the extra dimensions, works even if mask only has two dimensions.
     Qt_K[..., ~mask] = Qt_K[..., ~mask] - torch.inf
     return einsum(

@@ -15,7 +15,8 @@ def cross_entropy(inputs: Float[torch.Tensor, " batch_size vocab_size"], targets
 
     # Gather predicted log probabilities by index.
     targets = rearrange(targets, "batch -> batch ()")
-    target_log_probs = log_softmax.gather(-1, targets)
+    # Convert targets to long to avoid: RuntimeError: gather(): Expected dtype int64 for index 
+    target_log_probs = log_softmax.gather(-1, targets.long())
 
     target_log_probs = rearrange(target_log_probs, "batch 1 -> batch")
     return target_log_probs.mean()
