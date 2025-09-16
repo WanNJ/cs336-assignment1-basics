@@ -36,7 +36,8 @@ def get_lr_cosine_schedule(t: int, alpha_max, alpha_min, Tw, Tc):
 
 def gradient_clipping(parameters: Iterable[torch.nn.Parameter], max_l2_norm: float):
     p_grads = [p.grad for p in parameters if p.grad is not None]
-    l2_norm = torch.sqrt(sum([torch.sum(g.pow(2)) for g in p_grads]))
+    # l2_norm = torch.sqrt(sum([torch.sum(g.pow(2)) for g in p_grads]))
+    l2_norm = torch.norm(torch.cat([g.view(-1) for g in p_grads]))
 
     if l2_norm > max_l2_norm:
         scale_down_factor = max_l2_norm / (l2_norm + 1e-6)

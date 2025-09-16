@@ -34,6 +34,7 @@ def scaled_dot_product_attention(
     Qt_K = einsum(Q, K, "... seq1 d_k, ... seq2 d_k -> ... seq1 seq2")
     Qt_K = Qt_K / math.sqrt(d_k)
     # NOTE: the function automatically broadcasts.
+    mask = mask.to(Qt_K.device)
     Qt_K = Qt_K.masked_fill(~mask, -torch.inf)
     return einsum(
         softmax(Qt_K, len(Qt_K.shape) - 1),

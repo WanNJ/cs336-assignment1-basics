@@ -81,12 +81,12 @@ def create_model(config: dict) -> TransformerLM:
         device=config.get("device", None)
     )
 
-    if config["device"]:
-        model = model.to(device=config["device"])
-
     # Speed up training by JIT-compiling your model
     # Cuts the training time for about 20%.
-    # model = torch.compile(model, backend="aot_eager")
+    model = torch.compile(model, backend="aot_eager")
+
+    if config["device"]:
+        model = model.to(device=config["device"])
 
     return model
 
@@ -130,10 +130,10 @@ def train_model(config: dict):
 
     # Create model
     logging.info("Creating model...")
-    model = create_model(config).to(device)
+    model = create_model(config)
     logging.info(f"Model created with {sum(p.numel() for p in model.parameters())} parameters")
     logging.info(f"Planning to train model for {config['batch_size'] * config['context_length'] * config['num_iterations']} tokens")
-    
+
     # Setup optimizer - AdamW parameters
     optimizer = AdamW(
         model.parameters(),
@@ -185,13 +185,12 @@ def train_model(config: dict):
             config["context_length"], 
             device
         )
-        
-        optimizer.zero_grad()
 
         logits = model(x)
         loss = cross_entropy(logits.view(-1, logits.size(-1)), y.view(-1))
 
         # Run backward pass, which computes gradients.
+        optimizer.zero_grad()
         loss.backward()
         
         # Gradient clipping, which prevents exploding gradients
@@ -200,7 +199,7 @@ def train_model(config: dict):
 
         # Run optimizer step, which updates the parameters.
         optimizer.step()
-        
+
         # Logging
         if iteration % config["log_interval"] == 0:
             logging.info(f"Iteration {iteration}: loss={loss.item():.4f}, lr={lr:.6f}")
@@ -220,7 +219,7 @@ def train_model(config: dict):
             # Log to wandb
             if config.get("use_wandb"):
                 wandb.log(metrics)
-        
+
         # Save checkpoint
         if iteration % config["save_interval"] == 0 and iteration > 0:
             checkpoint_path = Path(config["checkpoint_dir"]) / f"checkpoint_{iteration}.pt"

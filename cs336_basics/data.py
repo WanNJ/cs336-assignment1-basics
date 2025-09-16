@@ -13,23 +13,23 @@ def bytes_to_tuple(bytes: bytes):
 def data_loading(
     dataset: npt.NDArray, batch_size: int, context_length: int, device: str
 ) -> tuple[torch.Tensor, torch.Tensor]:
-    if len(dataset) < context_length + batch_size:
-        raise ValueError(f"Not possible to generate {batch_size} unique samples.") 
-
-    # TODO: this is becoming bottleneck, optimize it.
-    valid_indices = np.arange(len(dataset) - context_length)
-    sampled_start_indices = np.random.choice(valid_indices, batch_size, replace=False)
-
-    x = np.array([dataset[s:s+context_length] for s in sampled_start_indices])
-    y = np.array([dataset[s+1:s+context_length+1] for s in sampled_start_indices])
-
-    x, y = torch.tensor(x, device=device), torch.tensor(y, device=device)
-
-    if device == "mps":
-        # Convert data type because Mac Chip does not support np.uint16
-        x = x.to(torch.int32)
-        y = y.to(torch.int32)
-
+    starting_idxs = torch.randint(len(dataset) - context_length, (batch_size,))
+    x = torch.stack([
+            torch.from_numpy((dataset[i : i + context_length]).astype(np.int64))
+            for i in starting_idxs
+    ])  # fmt: skip
+    y = torch.stack(
+        [
+            torch.from_numpy((dataset[i + 1 : i + 1 + context_length]).astype(np.int64))
+            for i in starting_idxs
+        ]
+    )  # fmt: skip
+    if "cuda" in device:
+        x = x.pin_memory().to(device, non_blocking=True)
+        y = y.pin_memory().to(device, non_blocking=True)
+    else:
+        x = x.to(device)
+        y = y.to(device)
     return x, y
 
 
