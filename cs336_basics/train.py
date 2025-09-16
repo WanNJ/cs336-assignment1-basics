@@ -96,23 +96,23 @@ def evaluate_model(model: torch.nn.Module, val_dataset: np.ndarray, config: dict
     model.eval()
     total_loss = 0.0
     num_batches = config["val_batches"]
-
+    # TODO: what if we go through all the data in val_dataset?
+    # TODO: What is used in real world scenarios?
     with torch.no_grad():
-        # TODO: do not use num_batches, go through all the data in val_dataset.
         for _ in range(num_batches):
             x_val, y_val = data_loading(
                 val_dataset,
-                config["batch_size"], 
+                config["batch_size"],
                 config["context_length"], 
                 config["device"]
             )
             logits = model(x_val)
             loss = cross_entropy(
-                logits.view(-1, logits.size(-1)), 
-                y_val.view(-1)
+                logits, 
+                y_val
             )
             total_loss += loss.item()
-    
+
     model.train()
     return total_loss / num_batches
 
@@ -187,7 +187,7 @@ def train_model(config: dict):
         )
 
         logits = model(x)
-        loss = cross_entropy(logits.view(-1, logits.size(-1)), y.view(-1))
+        loss = cross_entropy(logits, y)
 
         # Run backward pass, which computes gradients.
         optimizer.zero_grad()
@@ -209,13 +209,13 @@ def train_model(config: dict):
                 "train/learning_rate": lr,
                 "iteration": iteration
             }
-            
+
             # Validation
             if val_dataset is not None and iteration % config["val_interval"] == 0:
                 val_loss = evaluate_model(model, val_dataset, config)
                 logging.info(f"Validation loss: {val_loss:.4f}")
                 metrics["val/loss"] = val_loss
-            
+
             # Log to wandb
             if config.get("use_wandb"):
                 wandb.log(metrics)

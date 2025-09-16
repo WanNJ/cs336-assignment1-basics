@@ -8,17 +8,17 @@ from jaxtyping import Float, Int
 from einops import rearrange
 
 
-def cross_entropy(inputs: Float[torch.Tensor, " batch_size vocab_size"], targets: Int[torch.Tensor, " batch_size"]):
+def cross_entropy(logits: Float[torch.Tensor, "... vocab_size"], targets: Int[torch.Tensor, "..."]):
     # Subtract max value to make it numerical stable.
-    inputs = inputs - inputs.max(dim=-1, keepdim=True).values
-    log_softmax = inputs.exp().sum(-1, keepdim=True).log() - inputs
+    inputs = logits - logits.max(dim=-1, keepdim=True).values
+    neg_log_softmax = inputs.exp().sum(-1, keepdim=True).log() - inputs
 
     # Gather predicted log probabilities by index.
-    targets = rearrange(targets, "batch -> batch ()")
+    targets = rearrange(targets, "... -> ... ()")
     # Convert targets to long to avoid: RuntimeError: gather(): Expected dtype int64 for index 
-    target_log_probs = log_softmax.gather(-1, targets.long())
+    target_log_probs = neg_log_softmax.gather(-1, targets.long())
 
-    target_log_probs = rearrange(target_log_probs, "batch 1 -> batch")
+    target_log_probs = rearrange(target_log_probs, "... 1 -> ...")
     return target_log_probs.mean()
 
 
