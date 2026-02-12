@@ -9,6 +9,7 @@ class RMSNorm(torch.nn.Module):
         self.eps = eps
         self.device = device
         self.dtype = dtype
+        # weights is a learnable parameter of shape (d_model,), initialized to ones.
         self.weights = torch.nn.Parameter(torch.ones(d_model, device=device, dtype=dtype))
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
@@ -16,8 +17,8 @@ class RMSNorm(torch.nn.Module):
         (batch_size, sequence_length, d_model) and return a tensor of the same shape."""
         in_dtype = x.dtype
         rms = reduce(
-            torch.square(x.to(torch.float32)), 
-            "batch_size sequence_length d_model -> batch_size sequence_length 1", 
+            torch.square(x.to(torch.float32)),
+            "batch_size sequence_length d_model -> batch_size sequence_length 1",
             "sum"
         )
         rms = torch.sqrt(rms * (1 / self.d_model) + self.eps)
