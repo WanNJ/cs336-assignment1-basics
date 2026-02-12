@@ -23,7 +23,6 @@ class RotaryPositionalEmbedding(torch.nn.Module):
         for i in range(max_seq_len):
             sub_rotation_matrices = []
             for k in range(0, d_k // 2):
-                # NOTE: why 2k instead of 2k+1 refer to assignment 1 handout
                 angle = i / (theta ** ((2*k)/d_k))
                 c, s = torch.cos(torch.tensor(angle)), torch.sin(torch.tensor(angle))
                 sub_rotation_matrices.append(torch.tensor([[c, -s], [s, c]]))
